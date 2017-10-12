@@ -322,6 +322,43 @@ describe('validations', function() {
       });
     });
 
+    it('should pass options to custom synch', function(done) {
+      delete User.validations;
+      User.validate('name', function(err, options) {
+        if (options.options !== 'someValue') err();
+      });
+      User.create({name: 'Valid'}, {options: 'someValue'}, function(e, d) {
+        d.updateAttribute('name', null, {options: 'otherValue'}, function(e) {
+          should.exist(e);
+          e.should.be.instanceOf(Error);
+          e.should.be.instanceOf(ValidationError);
+          d.updateAttribute('name', 'Vasiliy', {options: 'someValue'}, function(e) {
+            should.not.exist(e);
+            done();
+          });
+        });
+      });
+    });
+
+    it('should pass options to custom async', function(done) {
+      delete User.validations;
+      User.validateAsync('name', function(err, options, done) {
+        if (options.options !== 'someValue') err();
+        process.nextTick(function() { done(); });
+      });
+      User.create({name: 'Valid'}, {options: 'someValue'}, function(e, d) {
+        d.updateAttribute('name', null, {options: 'otherValue'}, function(e) {
+          should.exist(e);
+          e.should.be.instanceOf(Error);
+          e.should.be.instanceOf(ValidationError);
+          d.updateAttribute('name', 'Vasiliy', {options: 'someValue'}, function(e) {
+            should.not.exist(e);
+            done();
+          });
+        });
+      });
+    });
+
     it('should work on update without options', function(done) {
       delete User.validations;
       User.validatesPresenceOf('name');
