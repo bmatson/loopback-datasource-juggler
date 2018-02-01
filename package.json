@@ -1,6 +1,6 @@
 {
   "name": "loopback-datasource-juggler",
-  "version": "3.12.0",
+  "version": "3.15.0",
   "publishConfig": {
     "export-tests": true
   },
@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "async-iterators": "^0.2.2",
+    "bson": "^1.0.4",
     "coveralls": "^2.13.1",
     "eslint": "^3.12.2",
     "eslint-config-loopback": "^8.0.0",
@@ -44,15 +45,15 @@
   "dependencies": {
     "async": "~2.1.4",
     "bluebird": "^3.1.1",
-    "debug": "^2.1.1",
+    "debug": "^3.1.0",
     "depd": "^1.0.0",
     "inflection": "^1.6.0",
     "lodash": "^4.17.4",
-    "loopback-connector": "^4.3.0",
+    "loopback-connector": "^4.4.0",
     "minimatch": "^3.0.3",
     "qs": "^6.5.0",
     "shortid": "^2.2.6",
-    "strong-globalize": "^2.6.2",
+    "strong-globalize": "^3.1.0",
     "traverse": "^0.6.6",
     "uuid": "^3.0.1"
   },

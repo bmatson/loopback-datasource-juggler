@@ -95,6 +95,22 @@ describe('relations', function() {
         });
       });
 
+      it('should not update FK', function(done) {
+        Book.create(function(err, book) {
+          book.chapters.create({name: 'chapter 1'}, function(err, c) {
+            if (err) return done(err);
+            should.exist(c);
+            c.bookId.should.eql(book.id);
+            c.name.should.eql('chapter 1');
+            book.chapters.updateById(c.id, {name: 'chapter 0', bookId: 10}, function(err, cc) {
+              should.exist(err);
+              err.message.should.startWith('Cannot override foreign key');
+              done();
+            });
+          });
+        });
+      });
+
       it('should create record on scope with promises', function(done) {
         Book.create()
         .then(function(book) {
@@ -820,12 +836,13 @@ describe('relations', function() {
             done();
           });
         });
-        it('returns empty result when filtering with wrong id key', function(done) {
-          var wrongWhereFilter = {where: {wrongIdKey: samplePatientId}};
-          physician.patients(wrongWhereFilter, function(err, ch) {
+        it('returns patient where name equal to samplePatient name', function(done) {
+          var whereFilter = {where: {name: 'a'}};
+          physician.patients(whereFilter, function(err, ch) {
             if (err) return done(err);
             should.exist(ch);
-            ch.should.have.lengthOf(0);
+            ch.should.have.lengthOf(1);
+            ch[0].name.should.eql('a');
             done();
           });
         });
@@ -849,6 +866,20 @@ describe('relations', function() {
                 idArr.indexOf(ch[0].id).should.not.equal(-1);
                 idArr.indexOf(ch[1].id).should.not.equal(-1);
               }
+              done();
+            });
+          });
+        });
+        it('returns empty result when patientId does not belongs to physician', function(done) {
+          Patient.create({name: 'x'}, function(err, p) {
+            if (err) return done(err);
+            should.exist(p);
+
+            var wrongWhereFilter = {where: {id: p.id}};
+            physician.patients(wrongWhereFilter, function(err, ch) {
+              if (err) return done(err);
+              should.exist(ch);
+              ch.should.have.lengthOf(0);
               done();
             });
           });
@@ -3257,6 +3288,17 @@ describe('relations', function() {
       });
     });
 
+    it('should not update related item FK on scope', function(done) {
+      Item.findById(itemId, function(e, todo) {
+        if (e) return done(e);
+        todo.list.update({id: 10}, function(err, list) {
+          should.exist(err);
+          err.message.should.startWith('Cannot override foreign key');
+          done();
+        });
+      });
+    });
+
     it('should get related item on scope', function(done) {
       Item.findById(itemId, function(e, todo) {
         todo.list(function(err, list) {
@@ -3572,6 +3614,18 @@ describe('relations', function() {
       });
     });
 
+    it('should not update the related item FK on scope', function(done) {
+      Supplier.findById(supplierId, function(err, supplier) {
+        if (err) return done(err);
+        should.exist(supplier);
+        supplier.account.update({supplierName: 'Supplier A', supplierId: 10}, function(err, acct) {
+          should.exist(err);
+          err.message.should.containEql('Cannot override foreign key');
+          done();
+        });
+      });
+    });
+
     it('should update the related item on scope with promises', function(done) {
       Supplier.findById(supplierId)
       .then(function(supplier) {
@@ -3585,7 +3639,7 @@ describe('relations', function() {
       .catch(done);
     });
 
-    it('should ignore the foreign key in the update', function(done) {
+    it('should error trying to change the foreign key in the update', function(done) {
       Supplier.create({name: 'Supplier 2'}, function(e, supplier) {
         var sid = supplier.id;
         Supplier.findById(supplierId, function(e, supplier) {
@@ -3594,7 +3648,23 @@ describe('relations', function() {
           supplier.account.update({supplierName: 'Supplier A',
             supplierId: sid},
             function(err, act) {
-              should.not.exist(e);
+              should.exist(err);
+              err.message.should.startWith('Cannot override foreign key');
+              done();
+            });
+        });
+      });
+    });
+
+    it('should update the related item on scope with same foreign key', function(done) {
+      Supplier.create({name: 'Supplier 2'}, function(err, supplier) {
+        Supplier.findById(supplierId, function(err, supplier) {
+          if (err) return done(err);
+          should.exist(supplier);
+          supplier.account.update({supplierName: 'Supplier A',
+            supplierId: supplierId},
+            function(err, act) {
+              if (err) return done(err);
               act.supplierName.should.equal('Supplier A');
               act.supplierId.toString().should.eql(supplierId.toString());
               done();
@@ -4283,13 +4353,20 @@ describe('relations', function() {
       );
       Address = tmp.define('Address', {street: String}, {idInjection: false});
       Other = db.define('Other', {name: String});
-    });
-
-    it('can be declared using embedsOne method', function(done) {
       Person.embedsOne(Passport, {
         default: {name: 'Anonymous'}, // a bit contrived
         methods: {check: function() { return true; }},
+        options: {
+          property: {
+            postgresql: {
+              columnName: 'passport_item',
+            },
+          },
+        },
       });
+    });
+
+    it('can be declared using embedsOne method', function(done) {
       Person.embedsOne(Address); // all by default
       db.automigrate(['Person'], done);
     });
@@ -4301,6 +4378,11 @@ describe('relations', function() {
       p.passportItem.create.should.be.a.function;
       p.passportItem.build.should.be.a.function;
       p.passportItem.destroy.should.be.a.function;
+    });
+
+    it('respects property options on the embedded property', function() {
+      Person.definition.properties.passport.should.have.property('postgresql');
+      Person.definition.properties.passport.postgresql.should.eql({columnName: 'passport_item'});
     });
 
     it('should setup a custom method on accessor', function() {
@@ -4704,7 +4786,15 @@ describe('relations', function() {
     });
 
     it('can be declared', function(done) {
-      Person.embedsMany(Address);
+      Person.embedsMany(Address, {
+        options: {
+          property: {
+            postgresql: {
+              dataType: 'json',
+            },
+          },
+        },
+      });
       db.automigrate(['Person'], done);
     });
 
@@ -4731,6 +4821,11 @@ describe('relations', function() {
           done();
         });
       });
+    });
+
+    it('respects property options on the embedded property', function() {
+      Person.definition.properties.addresses.should.have.property('postgresql');
+      Person.definition.properties.addresses.postgresql.should.eql({dataType: 'json'});
     });
 
     it('should create embedded items on scope', function(done) {
